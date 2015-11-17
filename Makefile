@@ -1,8 +1,9 @@
 all:
-	gcc -o server server.c
-	gcc -o client client.c
+	gcc -o sender sender.c
+	gcc -o receiver receiver.c
 run:	
-	./server 8000
+	./sender 8000
+	./receiver 127.0.0.1 8000 ted.jpg
 clean:
-	rm -f ./server
-	rm -f ./client
+	rm -f ./sender
+	rm -f ./receiver

@@ -13,3 +13,7 @@
 #### Run
 1. How to compile: simply type `make`
 2. How to remove executable files: type `make clean` 
+3. How to run: 
+  * ./sender <portnumber>
+  * ./receiver <sender hostname> <sender portnumber> <filenam>
+4. For example: `./sender 8000` and `./receiver 127.0.0.1 8000 ted.jpg`
