@@ -21,9 +21,9 @@ void error(char *msg)
 
 int main(int argc, char *argv[])
 {
-     int sockfd, newsockfd, portno, pid;
+     int sockfd;
      socklen_t clilen;
-     struct sockaddr_in serv_addr, cli_addr;
+     struct sockaddr_in snd_addr, rcv_addr;
 
      if (argc < 2) {
          fprintf(stderr,"ERROR, no port provided\n");
@@ -33,45 +33,20 @@ int main(int argc, char *argv[])
      // use SOCK_DGRAM for UDP transfer
      // AF_INET force IPv4
      sockfd = socket(AF_INET, SOCK_DGRAM, 0);	//create socket
-
      if (sockfd < 0) 
         error("ERROR opening socket");
-     memset((char *) &serv_addr, 0, sizeof(serv_addr));	//reset memory
+     memset((char *) &snd_addr, 0, sizeof(serv_addr));	//reset memory
 
      //fill in address info
-     portno = atoi(argv[1]);
-     serv_addr.sin_family = AF_INET;
-     serv_addr.sin_addr.s_addr = INADDR_ANY;
-     serv_addr.sin_port = htons(portno);
+     snd_addr.sin_family = AF_INET;
+     snd_addr.sin_addr.s_addr = INADDR_ANY;
+     snd_addr.sin_port = htons(atoi(argv[1]));
      
      if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) 
               error("ERROR on binding");
      
-     listen(sockfd,5);	//5 simultaneous connection at most
      
-     //accept connections
-     newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
-         
-     if (newsockfd < 0) 
-       error("ERROR on accept");
-         
-     int n;
-   	 char buffer[256];
-   			 
-   	 memset(buffer, 0, 256);	//reset memory
-      
- 		 //read client's message
-   	 n = read(newsockfd,buffer,255);
-   	 if (n < 0) error("ERROR reading from socket");
-   	 printf("Here is the message: %s\n",buffer);
-   	 
-   	 //reply to client
-   	 n = write(newsockfd,"I got your message",18);
-   	 if (n < 0) error("ERROR writing to socket");
-         
      
-     close(newsockfd);//close connection 
-     close(sockfd);
          
      return 0; 
 }
