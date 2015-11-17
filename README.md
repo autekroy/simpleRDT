@@ -1,12 +1,15 @@
 # UCLA CS 118 - project 2: simple RDT 
 
-Please see our report file for more information.
+### Please see our report file for more information.
 
-Project server code: server.c
-Project client code: client.c
+#### Files
+1. server code: server.c
+2. client code: client.c
 
-Yao-Jen Chang 704-405-423 autekwing@ucla.edu
-Yuanchen Liu 503-392-352 yuanchen@ucla.edu
+#### Authors
+1. Yao-Jen Chang 704-405-423 autekwing@ucla.edu
+2. Yuanchen Liu 503-392-352 yuanchen@ucla.edu
 
-How to compile: simply type `make`
-How to remove executable files: type `make clean` 
+#### Run
+1. How to compile: simply type `make`
+2. How to remove executable files: type `make clean` 
