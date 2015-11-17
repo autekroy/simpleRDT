@@ -17,3 +17,7 @@
   * ./sender <portnumber>
   * ./receiver <sender hostname> <sender portnumber> <filenam>
 4. For example: `./sender 8000` and `./receiver 127.0.0.1 8000 ted.jpg`
+
+
+#### Reference
+1. UDP socket example: http://www.binarytides.com/programming-udp-sockets-c-linux/
