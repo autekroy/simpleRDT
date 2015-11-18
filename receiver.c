@@ -19,51 +19,87 @@ void error(char *msg)
 
 int main(int argc, char *argv[])
 {
-    int sockfd; //Socket descriptor
-    int portno, n;
-    struct sockaddr_in serv_addr;
-    struct hostent *server; //contains tons of information, including the server's IP address
+    int sockfd;
+    struct sockaddr_in snd_addr;
 
-    char buffer[256];
-    if (argc < 3) {
-       fprintf(stderr,"usage %s hostname port\n", argv[0]);
-       exit(0);
+
+    if (argc < 2) {
+        fprintf(stderr,"ERROR, no port provided\n");
+        exit(1);
     }
+
+    // SOCK_DGRAM for UDP transfer
+    // AF_INET force IPv4
+    sockfd = socket(AF_INET, SOCK_DGRAM, 0);   //create socket
+    if (sockfd < 0) error("ERROR opening socket");
+    memset((char *) &snd_addr, 0, sizeof(serv_addr));  //reset memory
+
+    //fill in address info for sender
+    snd_addr.sin_family = AF_INET;
+    snd_addr.sin_addr.s_addr = htonl(atoi(argv[1]));;
+    snd_addr.sin_port = htons(atoi(argv[2]));
+
     
-    portno = atoi(argv[2]);
-    sockfd = socket(AF_INET, SOCK_STREAM, 0); //create a new socket
-    if (sockfd < 0) 
-        error("ERROR opening socket");
+    /*
+    pseudo code:
+    send the request via RDTsend()
+    receive the data via RDTreceive()
+
+    NextSeqNum=InitialSeqNumber
+    SendBase=InitialSeqNumber
+    loop (forever) 
+    { 
+        switch(event)
+            event: send data
+                create TCP segment with sequence number NextSeqNum 
+                if (timer currently not running)
+                    start timer
+                rdt_send()
+                break;
+            event: timer timeout
+                retransmit not-yet-acknowledged segment with
+                    smallest sequence number start timer
+                    rdt_send()
+                break;
+            event: ACK received, with ACK field value of y 
+                if (y > SendBase) {
+                    SendBase=y
+                    if (there are currently any not-yet-acknowledged segments)
+                        start timer 
+                }
+                break;
+    } 
     
-    server = gethostbyname(argv[1]); //takes a string like "www.yahoo.com", and returns a struct hostent which contains information, as IP address, address type, the length of the addresses...
-    if (server == NULL) {
-        fprintf(stderr,"ERROR, no such host\n");
-        exit(0);
-    }
+    //sender specific 
+    rdt_send()
+        if(nextseqnum<base+N)
+        {
+            sndpkt[nextseqnum]=make_pkt(nextseqnum,data,checksum) 
+            udt_send(sndpkt[nextseqnum])
+            if(base==nextseqnum)
+                start_timer
+            nextseqnum++
+        } 
+        else
+        ￼   refuse_data(data)
     
-    memset((char *) &serv_addr, 0, sizeof(serv_addr));
-    serv_addr.sin_family = AF_INET; //initialize server's address
-    bcopy((char *)server->h_addr, (char *)&serv_addr.sin_addr.s_addr, server->h_length);
-    serv_addr.sin_port = htons(portno);
+    rdt_receive_ack()
+        base=getacknum(rcvpkt)+1
+        If(base==nextseqnum)
+            stop_timer
+        else
+            start_timer
     
-    if (connect(sockfd,(struct sockaddr *)&serv_addr,sizeof(serv_addr)) < 0) //establish a connection to the server
-        error("ERROR connecting");
-    
-    printf("Please enter the message: ");
-    memset(buffer,0, 256);
-    fgets(buffer,255,stdin);	//read message
-    
-    n = write(sockfd,buffer,strlen(buffer)); //write to the socket
-    if (n < 0) 
-         error("ERROR writing to socket");
-    
-    memset(buffer,0,256);
-    n = read(sockfd,buffer,255); //read from the socket
-    if (n < 0) 
-         error("ERROR reading from socket");
-    printf("%s\n",buffer);	//print server's response
-    
-    close(sockfd); //close socket
-    
-    return 0;
+    //receiver specific
+    rdt_receive_data()
+        extract(rcvpkt,data)
+        append_data(data) 
+        sndpkt=make_pkt(expectedseqnum,ACK,checksum) 
+            udt_send(sndpkt)
+        expectedseqnum++
+
+
+    */  
+    return 0; 
 }
+

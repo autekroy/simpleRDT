@@ -22,7 +22,6 @@ void error(char *msg)
 int main(int argc, char *argv[])
 {
      int sockfd;
-     socklen_t clilen;
      struct sockaddr_in snd_addr, rcv_addr;
 
      if (argc < 2) {
@@ -46,6 +45,7 @@ int main(int argc, char *argv[])
               error("ERROR on binding");
      
      
+
      
          
      return 0; 
