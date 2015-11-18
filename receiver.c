@@ -40,66 +40,7 @@ int main(int argc, char *argv[])
     snd_addr.sin_port = htons(atoi(argv[2]));
 
     
-    /*
-    pseudo code:
-    send the request via RDTsend()
-    receive the data via RDTreceive()
-
-    NextSeqNum=InitialSeqNumber
-    SendBase=InitialSeqNumber
-    loop (forever) 
-    { 
-        switch(event)
-            event: send data
-                create TCP segment with sequence number NextSeqNum 
-                if (timer currently not running)
-                    start timer
-                rdt_send()
-                break;
-            event: timer timeout
-                retransmit not-yet-acknowledged segment with
-                    smallest sequence number start timer
-                    rdt_send()
-                break;
-            event: ACK received, with ACK field value of y 
-                if (y > SendBase) {
-                    SendBase=y
-                    if (there are currently any not-yet-acknowledged segments)
-                        start timer 
-                }
-                break;
-    } 
-    
-    //sender specific 
-    rdt_send()
-        if(nextseqnum<base+N)
-        {
-            sndpkt[nextseqnum]=make_pkt(nextseqnum,data,checksum) 
-            udt_send(sndpkt[nextseqnum])
-            if(base==nextseqnum)
-                start_timer
-            nextseqnum++
-        } 
-        else
-        ￼   refuse_data(data)
-    
-    rdt_receive_ack()
-        base=getacknum(rcvpkt)+1
-        If(base==nextseqnum)
-            stop_timer
-        else
-            start_timer
-    
-    //receiver specific
-    rdt_receive_data()
-        extract(rcvpkt,data)
-        append_data(data) 
-        sndpkt=make_pkt(expectedseqnum,ACK,checksum) 
-            udt_send(sndpkt)
-        expectedseqnum++
-
-
-    */  
+     
     return 0; 
 }
 
