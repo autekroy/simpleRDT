@@ -56,12 +56,15 @@ int main(int argc, char *argv[])
 
     // Build a request packet
     printf("Building request packet for file: %s\n", filename);
+    // request_packet
 
     // Send request packet
     printf("Send request packet\n");
-    if (sendto(sockfd, &filename, sizeof(filename), 0,
-            (struct sockaddr*) &serv_addr, serv_len) == -1)
+    if (sendto(sockfd, filename, strlen(filename), 0, (struct sockaddr*) &serv_addr, serv_len) == -1)
         error("ERROR on sending file request packet\n");
+
+    // request packet should look like this
+    // if (sendto(sockfd, &request_packet, sizeof(request_packet), 0, (struct sockaddr*) &serv_addr, serv_len) == -1)
 
     // get Ack for this request
 

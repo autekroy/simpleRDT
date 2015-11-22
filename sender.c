@@ -56,10 +56,10 @@ int main(int argc, char *argv[])
 
     // keep receiving file request
     while(1){
+        memset(buff, '\0', 256);
         // receive file request packet
         printf("receive file request packet\n");
-        if (recvfrom(sockfd, &buff, sizeof(buff), 0,
-                (struct sockaddr*) &rcv_addr, &rcv_len) < 0){
+        if (recvfrom(sockfd, buff, 256, 0, (struct sockaddr*) &rcv_addr, &rcv_len) == -1){
             error("ERROR on receiving file request packet");
             continue;
         }
