@@ -5,14 +5,28 @@
 int base;
 int nextseqnum;
 
-typedef enum packet_type{ACK, DATA}packet_type_t
+typedef enum {ACK, DATA} packet_type_t;
 
-typedef struct packet {
+typedef struct {
   packet_type_t type;// 1 byte ACK/DATA
   int seqnum;	// sequence number: 4 byte
   int size;	// total file size: 4 byte
   char data[PACKET_SIZE];
 }packet_t;
+
+
+void print_packet(packet_t pkt, int receive_pkt, int print_data){
+	if(receive_pkt == 1)printf("Recv pkt: ");
+	else				printf("Send pkt: ");
+
+	if(pkt.type == ACK)	printf("Type: Ack \t");
+	else				printf("Type: Data\t");
+
+	printf("seqnum: %d \t size: %d \t", pkt.seqnum, pkt.size);
+
+	if(print_data == 1)	printf("Data: %s\n", pkt.data);
+	else				printf("\n");
+}
 
 //converting from packet_t to stream
 char* packetToStream(packet_t* packet)
@@ -22,7 +36,7 @@ char* packetToStream(packet_t* packet)
 }
 
 //converting stream to packet_t
-packet_t* streamToPacket(char* stream)
+packet_t streamToPacket(char* stream)
 {
 	packet_t packet; 
 	return packet;
@@ -36,7 +50,8 @@ void alarm_handler(int sig)
 
 char* build_packet()
 {
-
+	char* tmp = "none";
+	return tmp;
 }
 
 
@@ -84,6 +99,7 @@ int rdt_send(char* buffer, int length, int sockfd, struct sockaddr_in addr, int 
 	return 0;
 	*/
 
+	return -1;
 
 }
 
