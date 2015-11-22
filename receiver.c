@@ -10,6 +10,7 @@
 #include <netdb.h>      // define structures like hostent
 #include <stdlib.h>
 #include <strings.h>
+#include "packet.h"
 
 void error(char *msg)
 {
@@ -24,6 +25,7 @@ int main(int argc, char *argv[])
     struct hostent *server; //contains tons of information, including the server's IP address
     char *hostname, *filename;
     socklen_t serv_len;
+    packet_t req_pkt;
 
     if (argc != 4)
         error("Usage: ./receiver <sender hostname> <sender portnumber> <filenam>\n");
@@ -56,15 +58,22 @@ int main(int argc, char *argv[])
 
     // Build a request packet
     printf("Building request packet for file: %s\n", filename);
+    req_pkt.type = DATA;
+    req_pkt.seqnum = 0;
+    req_pkt.size = strlen(filename) + 1;// string end character
+    strcpy(req_pkt.data, filename);
+
     // request_packet
 
     // Send request packet
-    printf("Send request packet\n");
-    if (sendto(sockfd, filename, strlen(filename), 0, (struct sockaddr*) &serv_addr, serv_len) == -1)
-        error("ERROR on sending file request packet\n");
+    // printf("Send request packet\n");
+    // if (sendto(sockfd, filename, strlen(filename), 0, (struct sockaddr*) &serv_addr, serv_len) == -1)
+        // error("ERROR on sending file request packet\n");
 
     // request packet should look like this
-    // if (sendto(sockfd, &request_packet, sizeof(request_packet), 0, (struct sockaddr*) &serv_addr, serv_len) == -1)
+    print_packet(req_pkt, 0, 1);// send request pakcet, print data
+    if (sendto(sockfd, &req_pkt, sizeof(req_pkt), 0, (struct sockaddr*) &serv_addr, serv_len) == -1)
+        error("ERROR on sending file request packet\n");
 
     // get Ack for this request
 

@@ -12,6 +12,7 @@
 #include <sys/wait.h>	/* for the waitpid() system call */
 #include <signal.h>	/* signal name macros, and the kill() prototype */
 
+#include "packet.h"
 
 void error(char *msg)
 {
@@ -25,6 +26,7 @@ int main(int argc, char *argv[])
     struct sockaddr_in snd_addr, rcv_addr;
     char buff[256];
     socklen_t rcv_len;
+    packet_t in_pkt;
 
     if (argc != 3)
        error("Usage: ./sender <portnumber> <window size>\n");
@@ -59,11 +61,19 @@ int main(int argc, char *argv[])
         memset(buff, '\0', 256);
         // receive file request packet
         printf("receive file request packet\n");
-        if (recvfrom(sockfd, buff, 256, 0, (struct sockaddr*) &rcv_addr, &rcv_len) == -1){
+        // if (recvfrom(sockfd, buff, 256, 0, (struct sockaddr*) &rcv_addr, &rcv_len) == -1){
+        //     error("ERROR on receiving file request packet");
+        //     continue;
+        // }
+        // printf("%s\n", buff);
+        
+        if (recvfrom(sockfd, &in_pkt, sizeof(in_pkt), 0, (struct sockaddr*) &rcv_addr, &rcv_len) == -1){
             error("ERROR on receiving file request packet");
             continue;
         }
-        printf("%s\n", buff);
+        print_packet(in_pkt, 1, 1); // receive request, print request
+
+        
 
         // check file exist
 
