@@ -23,7 +23,7 @@ int main(int argc, char *argv[])
     struct sockaddr_in serv_addr;
     struct hostent *server; //contains tons of information, including the server's IP address
     char *hostname, *filename;
-
+    socklen_t serv_len;
 
     if (argc != 4)
         error("Usage: ./receiver <sender hostname> <sender portnumber> <filenam>\n");
@@ -39,27 +39,34 @@ int main(int argc, char *argv[])
     if (sockfd < 0) 
         error("ERROR opening socket");
 
-    memset((char *) &serv_addr, 0, sizeof(serv_addr));  //reset memory
-    serv_addr.sin_family = AF_INET; //initialize server's address
-    bcopy((char *)server->h_addr, (char *)&serv_addr.sin_addr.s_addr, server->h_length);
-    serv_addr.sin_port = htons(portno);
-
-    // socket doesn't need to bind(), we just let OS assign a port number automatically
-
     server = gethostbyname(hostname);
     if (server == NULL) {
         fprintf(stderr,"ERROR, no such host\n");
         exit(0);
     }
     
+    memset((char *) &serv_addr, 0, sizeof(serv_addr));  //reset memory
+    serv_len = sizeof(serv_addr);
+    serv_addr.sin_family = AF_INET; //initialize server's address
+    bcopy((char *)server->h_addr, (char *)&serv_addr.sin_addr.s_addr, server->h_length);
+    serv_addr.sin_port = htons(portno);
+
+    // socket doesn't need to bind(), we just let OS assign a port number automatically
+
+
     // Build a request packet
     printf("Building request packet for file: %s\n", filename);
 
     // Send request packet
+    printf("Send request packet\n");
+    if (sendto(sockfd, &filename, sizeof(filename), 0,
+            (struct sockaddr*) &serv_addr, serv_len) == -1)
+        error("ERROR on sending file request packet\n");
 
     // get Ack for this request
 
-    // check if file exist
+    // file not exist, error
+    // file exist: send ACK
 
     // receiving files
 

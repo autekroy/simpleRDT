@@ -1,5 +1,5 @@
 all:
-	# gcc -o sender sender.c
+	gcc -o sender sender.c
 	gcc -o receiver receiver.c
 run:	
 	./sender 8000
