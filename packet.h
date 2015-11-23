@@ -1,16 +1,31 @@
-#define PACKET_SIZE 	1024
-#define TIMEOUT			500		//in miliseconds 		
+#define PACKET_SIZE 		1024
+#define TIMEOUT				500		//in miliseconds 		
+#define SEND_BUFFER_SIZE	1024
+#define RECEIVE_BUFFER_SIZE	PACKET_SIZE * 1024
+
 //#define MAXWINDOWSIZE 	10
 
+int debug = 1;
+
+//sending side variables
 int base;
-int nextseqnum;
+int nextSeqNum;
+int lastDataSeqNum;
+
+//receiving side variable
+int expSeqNum;
+
+//file variables
+char* file_ptr;
+int file_size;
 
 typedef enum {ACK, DATA} packet_type_t;
 
 typedef struct {
-  packet_type_t type;// 1 byte ACK/DATA
-  int seqnum;	// sequence number: 4 byte
-  int size;	// total file size: 4 byte
+  packet_type_t type;		// 1 byte ACK/DATA
+  int seqnum;				// sequence number: 4 byte
+  int size;					// total file size: 4 byte
+  char ending_flag;
   char data[PACKET_SIZE];
 }packet_t;
 
@@ -46,6 +61,7 @@ packet_t streamToPacket(char* stream)
 void alarm_handler(int sig)
 {
 	//retransmit everything in my window
+	printf("Timer expired")
 }
 
 char* build_packet()

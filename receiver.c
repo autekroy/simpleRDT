@@ -71,7 +71,7 @@ int main(int argc, char *argv[])
         // error("ERROR on sending file request packet\n");
 
     // request packet should look like this
-    print_packet(req_pkt, 0, 1);// send request pakcet, print data
+    print_packet(req_pkt, 0, 0);// send request pakcet, print data
     if (sendto(sockfd, &req_pkt, sizeof(req_pkt), 0, (struct sockaddr*) &serv_addr, serv_len) == -1)
         error("ERROR on sending file request packet\n");
 
