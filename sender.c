@@ -12,7 +12,6 @@
 #include <sys/wait.h>	/* for the waitpid() system call */
 #include <signal.h>	    /* signal name macros, and the kill() prototype */
 #include <sys/time.h>   // for setitimer
-
 #include "packet.h"
 
 #define WAITING     0
@@ -25,7 +24,6 @@ void error(char *msg)
 }
 
 
-
 int main(int argc, char *argv[])
 {
     int sockfd, portno, win_size;
@@ -35,6 +33,11 @@ int main(int argc, char *argv[])
     packet_t in_pkt, out_pkt;
     char buffer[PACKET_SIZE];
     char* allData;
+
+    //file variables
+    char* file_ptr;
+    int file_size;
+
 
     if (argc != 3)
        error("Usage: ./sender <portnumber> <window size>\n");
@@ -55,8 +58,7 @@ int main(int argc, char *argv[])
     snd_addr.sin_port = htons(portno);
     
     // bind the port number to this socket     
-    if (bind(sockfd, (struct sockaddr *) &snd_addr,
-              sizeof(snd_addr)) < 0) 
+    if (bind(sockfd, (struct sockaddr *) &snd_addr, sizeof(snd_addr)) < 0) 
               error("ERROR on binding");
     
     // not sure if we need it or not
@@ -100,7 +102,7 @@ int main(int argc, char *argv[])
     FD_ZERO(&readfds);
     FD_SET(sockfd, &readfds);
 
-    char state = WAITING;
+    int state = WAITING;
 
     //initializing sending and receiving state variables
     expSeqNum = 1;
@@ -126,10 +128,13 @@ int main(int argc, char *argv[])
     time_out_val.it_value.tv_usec = (TIMEOUT*1000) % 1000000;   
     time_out_val.it_interval = time_out_val.it_value;
 
+    struct timeval tv;
+    tv.tv_sec = 1;
+    tv.tv_usec = 0;
 
     while(1)
     {
-        if(select(sockfd+1, &readfds, NULL, NULL, 1))
+        if(select(sockfd+1, &readfds, NULL, NULL, &tv))
         {
             //receive data
             if (recvfrom(sockfd, &in_pkt, sizeof(in_pkt), 0, (struct sockaddr*) &rcv_addr, &rcv_len) == -1){
@@ -154,7 +159,7 @@ int main(int argc, char *argv[])
                     expSeqNum++;
 
                     //transition state if completed receiving
-                    if(in_pkt.ending_flag = 1)
+                    if(in_pkt.ending_flag == 1)
                     {
                         if (debug) printf("(last pkt)");
                         state = PROCESSING;
@@ -183,7 +188,7 @@ int main(int argc, char *argv[])
                 if (in_pkt.seqnum >= base)
                 {
                     //sliding sending window
-                    base = ack_num + 1;
+                    base = in_pkt.seqnum + 1; //in_pkt.seqnum -> ack num
                     /*
                     if(base == nextseqnum)
                         setitimer(0);
@@ -202,7 +207,7 @@ int main(int argc, char *argv[])
                     */
                     out_pkt.type = DATA;
                     out_pkt.seqnum = nextSeqNum;
-                    out_pkt.size = get_file_segment(nextSeqNum, file_ptr, &out_pkt.data, PACKET_SIZE);
+                    out_pkt.size = get_file_segment(nextSeqNum, file_ptr, out_pkt.data, PACKET_SIZE, file_size);
                     
                     // check if it's last packet
                     if(nextSeqNum == lastDataSeqNum)
@@ -212,21 +217,79 @@ int main(int argc, char *argv[])
                     if (sendto(sockfd, &out_pkt, sizeof(out_pkt), 0, (struct sockaddr*) &rcv_addr, rcv_len) == -1)
                         error("ERROR on sending file request packet\n");  
 
-                    nextSeqNum++
+                    nextSeqNum++;
                 }
             }
         }
         else
         {
+            FD_SET(sockfd, &readfds);
+            if(state == WAITING)
+            {
+                if(debug) printf("waiting %d\n", state);
+            }
+            
             if(state == PROCESSING)
             {
                 //if file exist, open file
                 //if file doens't exist, save error message into buffer
 
+                // check if file exist
+                if(debug) printf("Process request: %s\n", rcvBuffer);
+
+                size_t readResult;
+                
+                //Open file and read
+                FILE* file = fopen ( rcvBuffer , "r" );
+
+                if(file == NULL) { //If the file does not exist
+                  error("404: File not found\n");
+                }
+
+                //Obtain file size:
+                //fseek: Reposition stream position indicator
+                //SEEK_END: End of file
+                fseek (file , 0 , SEEK_END);
+                file_size = ftell (file); //Get current position in stream
+                rewind (file); //Set position of stream to the beginning
+
+                // allocate memory to contain the whole file:
+                file_ptr = (char*) malloc (sizeof(char)*file_size);
+                if (file_ptr == NULL) error("Memory error");
+
+                // copy the file into the buffer:
+                readResult = fread (file_ptr,1,file_size,file);
+                if (readResult != file_size) error("Reading error");
+                  //write(newsockfd, "Reading error\r\n", 15);
+
+
                 lastDataSeqNum =  file_size/PACKET_SIZE;
                 if(file_size % PACKET_SIZE != 0)
                     lastDataSeqNum += 1;
                 
+                printf("file_size: %d\tlastDataSeqNum: %d\n", file_size, lastDataSeqNum);
+
+                while (nextSeqNum < base + win_size && nextSeqNum <= lastDataSeqNum)
+                {
+                    /*
+                    if(nextSeqNum == base) //when sending first packet
+                        setitimer(TIMEOUT)
+                    */
+                    out_pkt.type = DATA;
+                    out_pkt.seqnum = nextSeqNum;
+                    out_pkt.size = get_file_segment(nextSeqNum, file_ptr, out_pkt.data, PACKET_SIZE, file_size);
+                    
+                    // check if it's last packet
+                    if(nextSeqNum == lastDataSeqNum)
+                        out_pkt.ending_flag = 1;
+
+                    print_packet(out_pkt, 0, 0);// send request pakcet, print data
+                    if (sendto(sockfd, &out_pkt, sizeof(out_pkt), 0, (struct sockaddr*) &rcv_addr, rcv_len) == -1)
+                        error("ERROR on sending file request packet\n");  
+
+                    nextSeqNum++;
+                }
+                state = WAITING;
 
             }
 

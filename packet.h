@@ -15,9 +15,6 @@ int lastDataSeqNum;
 //receiving side variable
 int expSeqNum;
 
-//file variables
-char* file_ptr;
-int file_size;
 
 typedef enum {ACK, DATA} packet_type_t;
 
@@ -43,6 +40,21 @@ void print_packet(packet_t pkt, int receive_pkt, int print_data){
 	else				printf("\n");
 }
 
+unsigned int get_file_segment(int nextSeqNum, char* file_ptr, char* data, int pktSize, int file_size){
+	int now_pos = (nextSeqNum-1) * pktSize;
+
+	if(nextSeqNum * pktSize <= file_size){
+		memcpy(data, file_ptr + now_pos, pktSize);
+		return pktSize;
+	}
+	else{
+		int remaining = file_size - now_pos;
+		memcpy(data, file_ptr + now_pos, remaining);
+		return remaining;
+	}
+
+}
+
 //converting from packet_t to stream
 char* packetToStream(packet_t* packet)
 {
@@ -61,7 +73,7 @@ packet_t streamToPacket(char* stream)
 void alarm_handler(int sig)
 {
 	//retransmit everything in my window
-	printf("Timer expired")
+	printf("Timer expired");
 }
 
 char* build_packet()
@@ -121,8 +133,8 @@ int rdt_send(char* buffer, int length, int sockfd, struct sockaddr_in addr, int 
 
 
 //return pointer to 
-char* rdt_receive(int* length, int sockfd, struct sockaddr_in addr)
-{
+// char* rdt_receive(int* length, int sockfd, struct sockaddr_in addr)
+// {
 /*
 
 	receive the first packet that declares the number of packets (blocking)
@@ -150,5 +162,6 @@ char* rdt_receive(int* length, int sockfd, struct sockaddr_in addr)
 				udt_send(ACK, expectedseqnum-1)
 		}
 	}
-}
-*/
+	*/
+// }
+
