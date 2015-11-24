@@ -96,10 +96,9 @@ int main(int argc, char *argv[])
     char* sndBuffer[SEND_BUFFER_SIZE];
     memset(sndBuffer, '\0', SEND_BUFFER_SIZE);
     
-    //supports up to 4GB-1 size of file
     unsigned int rcvBufferSize = RECEIVE_BUFFER_SIZE;
     unsigned int rcvBufferIndex = 0;
-    char* rcvBuffer = (char*)malloc(sizeof(RECEIVE_BUFFER_SIZE));
+    char* rcvBuffer = (char*)malloc(sizeof(char) * RECEIVE_BUFFER_SIZE);
 
     //setup timer
     struct itimerval time_out_val;    /* for setting itimer */
@@ -132,10 +131,10 @@ int main(int argc, char *argv[])
                 //store received packet
                 if (in_pkt.seqnum == expSeqNum)
                 {
-                    if (debug) printf("Packet seqnum %d stored\t", in_pkt.seqnum);
+                    if (debug) printf("Packet seqnum %d stored. Pkt size: %d, bufferIndex: %d, buffersize: %d\t", in_pkt.seqnum, in_pkt.size, rcvBufferIndex, rcvBufferSize);
                     if(rcvBufferIndex + in_pkt.size >= rcvBufferSize)
                     {
-                        rcvBuffer = (char*)realloc(rcvBuffer, rcvBufferSize+RECEIVE_BUFFER_SIZE);
+                        rcvBuffer = (char*)realloc(rcvBuffer, sizeof(char) * (rcvBufferSize+RECEIVE_BUFFER_SIZE));
                         rcvBufferSize += RECEIVE_BUFFER_SIZE;
                     }
                     memcpy(rcvBuffer+rcvBufferIndex, &in_pkt.data, in_pkt.size);
@@ -235,8 +234,7 @@ int main(int argc, char *argv[])
 
         }
     }
-
-
+    free(rcvBuffer);
      
     return 0; 
 }

@@ -295,7 +295,7 @@ int main(int argc, char *argv[])
 
         }
     }
-
+    free(rcvBuffer);
 
     return 0; 
 }
