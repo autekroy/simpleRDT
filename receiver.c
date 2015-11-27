@@ -24,8 +24,23 @@ void error(char *msg)
     exit(0);
 }
 
+void resend_window(int sig)
+{
+    //retransmit everything in my window
+    printf("Timer expired");
+}
+
+int simulate(double probability) {
+    double random_value = (double) rand() / (double) RAND_MAX;
+    if (random_value <  probability)
+        return 1;
+    return 0;
+}
+
+
 int main(int argc, char *argv[])
 {
+    double loss_rate, corrupt_rate;
     int sockfd, portno;
     struct sockaddr_in snd_addr;
     struct hostent *server; //contains tons of information, including the server's IP address
@@ -37,8 +52,10 @@ int main(int argc, char *argv[])
     char* file_ptr;
     int file_size;
 
-    if (argc != 4)
+    if (argc != 6)
         error("Usage: ./receiver <sender hostname> <sender portnumber> <filenam>\n");
+
+    srand(time(NULL));
 
     int win_size = 1, lastDataSeqNum = 1;
     //initializing readfds for select
@@ -56,6 +73,11 @@ int main(int argc, char *argv[])
     hostname = argv[1];
     portno = atoi(argv[2]);// port number
     filename = argv[3];
+    loss_rate = atof(argv[4]);
+    corrupt_rate = atof(argv[5]);
+
+    if(loss_rate < 0.0 || loss_rate > 1.0 || corrupt_rate < 0.0 || corrupt_rate > 1.0)
+        error("impossible loss rate or corruption rate (should be between 0 and 1)");
     // printf("%s %d %s\n", hostname, portno, filename);
 
     // SOCK_DGRAM for UDP transfer
@@ -103,7 +125,7 @@ int main(int argc, char *argv[])
     //setup timer
     struct itimerval time_out_val;    /* for setting itimer */
 
-    if (signal(SIGALRM, (void (*)(int)) alarm_handler) == SIG_ERR) {
+    if (signal(SIGALRM, (void (*)(int)) resend_window) == SIG_ERR) {
         perror("Unable to catch SIGALRM");
         exit(1);
     }
@@ -117,8 +139,15 @@ int main(int argc, char *argv[])
 
     while(1)
     {
-        if(select(sockfd+1, &readfds, NULL, NULL, &tv))
+        FD_ZERO(&readfds);
+        FD_SET(sockfd, &readfds);
+
+        if(select(sockfd+1, &readfds, NULL, NULL, &tv) < 0){
+            printf("select error\n");
+        } 
+        else if (FD_ISSET(sockfd, &readfds)) 
         {
+            
             //receive data
             if (recvfrom(sockfd, &in_pkt, sizeof(in_pkt), 0, (struct sockaddr*) &snd_addr, &snd_len) == -1){
                 error("ERROR on receiving file request packet");
@@ -128,6 +157,24 @@ int main(int argc, char *argv[])
             //if received DATA
             if(in_pkt.type == DATA)
             {
+
+                // lose this DATA (didn't receive)
+                if(simulate(loss_rate)){
+                    printf("Simulate didn't get DATA %d\n", in_pkt.seqnum);
+                    continue;
+                }           
+                else if (simulate(corrupt_rate)) {
+                    printf("Simulate DATA %d is corrupted\n", in_pkt.seqnum);
+                    // resend the expected ACK
+                    out_pkt.type = ACK;
+                    out_pkt.seqnum = expSeqNum - 1;
+                    out_pkt.size = 0;
+                    if (sendto(sockfd, &out_pkt, sizeof(out_pkt), 0, (struct sockaddr*) &snd_addr, snd_len) == -1)
+                        error("ERROR on sending file request packet\n");     
+                    print_packet(out_pkt, 0, 0);// send request pakcet, print data
+                    continue;
+                }
+
                 //store received packet
                 if (in_pkt.seqnum == expSeqNum)
                 {
@@ -151,7 +198,7 @@ int main(int argc, char *argv[])
                 }
                 else
                 {
-                    if (debug) printf("***** Packet seqnum %d dropped\n", in_pkt.seqnum);
+                    if (debug) printf("====== Drop DATA %d\n", in_pkt.seqnum);
                 }
 
                 //Enhancement: create a ACK specific package to reduce ACK size
@@ -159,9 +206,9 @@ int main(int argc, char *argv[])
                 out_pkt.seqnum = expSeqNum - 1;
                 out_pkt.size = 0;
 
-                print_packet(out_pkt, 0, 0);// send request pakcet, print data
                 if (sendto(sockfd, &out_pkt, sizeof(out_pkt), 0, (struct sockaddr*) &snd_addr, snd_len) == -1)
-                    error("ERROR on sending file request packet\n");     
+                    error("ERROR on sending file request packet\n");   
+                print_packet(out_pkt, 0, 0);// send request pakcet, print data  
 
             }
             //if received ACK
@@ -185,10 +232,11 @@ int main(int argc, char *argv[])
                 while (nextSeqNum < base + win_size && nextSeqNum <= lastDataSeqNum)
                 {
                     if (debug) printf("has remaining data\n");
-                    /*
-                    if(nextSeqNum == base) //when sending first packet
-                        setitimer(TIMEOUT)
-                    */
+                    
+                    if(nextSeqNum == base){ //when sending first packet
+                        // setitimer(TIMEOUT)
+                    }
+                    
                     out_pkt.type = DATA;
                     out_pkt.seqnum = nextSeqNum;
                     out_pkt.size = get_file_segment(nextSeqNum, file_ptr, out_pkt.data, PACKET_SIZE, file_size);
@@ -197,9 +245,9 @@ int main(int argc, char *argv[])
                     if(nextSeqNum == lastDataSeqNum)
                         out_pkt.ending_flag = 1;
 
-                    print_packet(out_pkt, 0, 0);// send request pakcet, print data
                     if (sendto(sockfd, &out_pkt, sizeof(out_pkt), 0, (struct sockaddr*) &snd_addr, snd_len) == -1)
-                        error("ERROR on sending file request packet\n");  
+                        error("ERROR on sending file request packet\n"); 
+                    print_packet(out_pkt, 0, 0);// send request pakcet, print data 
 
                     nextSeqNum++;
                 }
@@ -207,10 +255,9 @@ int main(int argc, char *argv[])
         }
         else
         {
-            FD_SET(sockfd, &readfds);
             if(state == WAITING)
             {
-                if(debug) printf("waiting %d\n", state);
+                if(debug) printf("waiting %d\n", state);                
             }
             
             if(state == PROCESSING)

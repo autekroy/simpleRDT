@@ -1,5 +1,5 @@
 #define PACKET_SIZE 		1024
-#define TIMEOUT				500		//in miliseconds 		
+#define TIMEOUT				100		//in miliseconds 		
 #define SEND_BUFFER_SIZE	1024
 #define RECEIVE_BUFFER_SIZE	PACKET_SIZE * 1024
 
@@ -28,13 +28,14 @@ typedef struct {
 
 
 void print_packet(packet_t pkt, int receive_pkt, int print_data){
-	if(receive_pkt == 1)printf("Recv pkt: ");
-	else				printf("Send pkt: ");
+	if(receive_pkt == 1)		printf("Recv pkt: ");
+	else if(receive_pkt == 0)	printf("Send pkt: ");
+	else						printf("Lose pkt: ");
 
 	if(pkt.type == ACK)	printf("Type: Ack \t");
 	else				printf("Type: Data\t");
 
-	printf("seqnum: %d \t size: %d \t", pkt.seqnum, pkt.size);
+	printf(" %d \t size: %d \t", pkt.seqnum, pkt.size);
 
 	if(print_data == 1)	printf("Data: %s\n", pkt.data);
 	else				printf("\n");
@@ -55,39 +56,11 @@ unsigned int get_file_segment(int nextSeqNum, char* file_ptr, char* data, int pk
 
 }
 
-//converting from packet_t to stream
-char* packetToStream(packet_t* packet)
-{
-	char* stream; 
-	return stream;
-}
-
-//converting stream to packet_t
-packet_t streamToPacket(char* stream)
-{
-	packet_t packet; 
-	return packet;
-}
-
-
-void alarm_handler(int sig)
-{
-	//retransmit everything in my window
-	printf("Timer expired");
-}
-
-char* build_packet()
-{
-	char* tmp = "none";
-	return tmp;
-}
-
-
 
 int rdt_send(char* buffer, int length, int sockfd, struct sockaddr_in addr, int cwnd)
 {
 
-	signal(SIGALRM, alarm_handler);
+	// signal(SIGALRM, alarm_handler);
 	/*
 
 	initialize variables

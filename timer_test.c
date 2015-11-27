@@ -25,6 +25,14 @@ void DoStuff(void) {
 
 }
 
+double simulate(double probability) {
+    double random_value = (double) rand() / (double) RAND_MAX;
+    if (random_value <  probability)
+        return random_value;
+    return random_value;
+}
+
+
 void alarm_handler(int sig)
 {
 	//retransmit everything in my window
@@ -47,24 +55,35 @@ int main(int argc, char *argv[]) {
   it_val.it_value.tv_sec =     (INTERVAL+now)/1000;
   it_val.it_value.tv_usec =    (INTERVAL*1000) % 1000000;	
   it_val.it_interval = it_val.it_value;  
-  if (setitimer(ITIMER_REAL, &it_val, NULL) == -1) {
-    perror("error calling setitimer()");
-    exit(1);
-  }
+  // if (setitimer(ITIMER_REAL, &it_val, NULL) == -1) {
+  //   perror("error calling setitimer()");
+  //   exit(1);
+  // }
+  int inwhile = 0;
+  // set random seed
+  srand(time(NULL));
 
-  while (1) {
-  	  pause();
-  	  if (setitimer(ITIMER_REAL, &it_val, NULL) == -1) {
-	    perror("error calling setitimer()");
-	    exit(1);
-  	  }
-  	  else{
-  	  	  now += 1000;
-  	  	  it_val.it_value.tv_sec =     (INTERVAL+now)/1000;
-		  it_val.it_value.tv_usec =    (INTERVAL*1000) % 1000000;	
-		  it_val.it_interval = it_val.it_value;
-  	  }
-    
-	}
+  
+  if (setitimer(ITIMER_REAL, &it_val, NULL) == -1) {
+	perror("error calling setitimer()");
+	exit(1);
+  }
+  pause();
+
+ //  while (1) {
+  	  
+ //  	  if (setitimer(ITIMER_REAL, &it_val, NULL) == -1) {
+	//     perror("error calling setitimer()");
+	//     exit(1);
+ //  	  }
+ //  	  else{
+ //  	  	  now += 1000;
+ //  	  	  it_val.it_value.tv_sec =     (INTERVAL+now)/1000;
+	// 	  it_val.it_value.tv_usec =    (INTERVAL*1000) % 1000000;	
+	// 	  it_val.it_interval = it_val.it_value;
+ //  	  }
+ //    	printf("%lf\n", simulate(0.6));
+ //    	pause();
+	// }
 }
 
