@@ -6,58 +6,35 @@
 #include <stdio.h>
 #include <sys/types.h>   // definitions of a number of data types used in socket.h and netinet/in.h
 #include <sys/socket.h>  // definitions of structures needed for sockets, e.g. sockaddr
-#include <netinet/in.h>  // constants and structures needed for internet domain addresses, e.g. sockaddr_in
+#include <netinet/in.h>  // constants and structures needed for internet domain addresses, e.g. sockaddr
 #include <stdlib.h>
-#include <strings.h>
+#include <string.h>
 #include <sys/wait.h>	/* for the waitpid() system call */
 #include <signal.h>	    /* signal name macros, and the kill() prototype */
 #include <sys/time.h>   // for setitimer
 #include "packet.h"
 
-#define WAITING     0
-#define PROCESSING  1
+#define SEND_BUFFER_SIZE        PACKET_SIZE     //in bytes
+#define RECEIVE_BUFFER_SIZE     PACKET_SIZE     //in bytes
 
-void error(char *msg)
-{
-    fprintf(stderr, "%s", msg);
-    exit(0);
-}
-
-int resend;
 void resend_window(int sig)
 {
     //retransmit everything in my window
     printf("========= Timer expired on %d\n", base);
-    nextSeqNum = base;
-    resend = 1;
+    state = RETRANSMIT;
 }
-
-int simulate(double probability) {
-    double random_value = (double) rand() / (double) RAND_MAX;
-    if (random_value <  probability)
-        return 1;
-    return 0;
-}
-
 
 int main(int argc, char *argv[])
 {
-    int sockfd, portno, win_size;
-    double loss_rate, corrupt_rate;
+    int sockfd, portno;
     struct sockaddr_in snd_addr, rcv_addr;
-    //char buff[256];
-    socklen_t rcv_len;
-    packet_t in_pkt, out_pkt;
-    char buffer[PACKET_SIZE];
-    char* allData;
-
-    //file variables
     char* file_ptr;
     int file_size;
-    resend = 0;
+
+    socklen_t rcv_addr_len;
 
     if (argc != 5)
-       error("Usage: ./sender <portnumber> <window size>\n");
+       error("Usage: ./sender <portnumber> <window size> <loss rate> <corrupt rate>\n");
 
     srand(time(NULL));
 
@@ -73,50 +50,48 @@ int main(int argc, char *argv[])
     corrupt_rate = atof(argv[4]);
 
     if(loss_rate < 0.0 || loss_rate > 1.0 || corrupt_rate < 0.0 || corrupt_rate > 1.0)
-        error("impossible loss rate or corruption rate (should be between 0 and 1)");
+        error("ERROR impossible loss rate or corruption rate (should be between 0 and 1)");
 
     memset((char *) &snd_addr, 0, sizeof(snd_addr));	//reset memory
-    //fill in address info
+    
+    //bind the port number to this socket  
     snd_addr.sin_family = AF_INET;
     snd_addr.sin_addr.s_addr = INADDR_ANY;
-    snd_addr.sin_port = htons(portno);
-    
-    // bind the port number to this socket     
+    snd_addr.sin_port = htons(portno);   
     if (bind(sockfd, (struct sockaddr *) &snd_addr, sizeof(snd_addr)) < 0) 
-              error("ERROR on binding");
+        error("ERROR on binding");
 
     //initializing readfds for select
     fd_set readfds;
-    FD_ZERO(&readfds);
-    FD_SET(sockfd, &readfds);
-
-    int state = WAITING;
 
     //initializing sending and receiving state variables
-    expSeqNum = 1;
-    base = 1;
-    nextSeqNum = base;
+    state = WAITING;
+    rdt_init();
 
-    char* sndBuffer[SEND_BUFFER_SIZE];
-    memset(sndBuffer, '\0', SEND_BUFFER_SIZE);
+    // char* sndBuffer[SEND_BUFFER_SIZE];
+    // memset(sndBuffer, '\0', SEND_BUFFER_SIZE);
     
     //supports up to 4GB-1 size of file
     unsigned int rcvBufferSize = RECEIVE_BUFFER_SIZE;
     unsigned int rcvBufferIndex = 0;
-    char* rcvBuffer = (char*)malloc(sizeof(RECEIVE_BUFFER_SIZE));
+    char* rcvBuffer = (char*)malloc(sizeof(char) * RECEIVE_BUFFER_SIZE);
 
-    //setup timer
-    struct itimerval time_out_val;    /* for setting itimer */
-
-    if (signal(SIGALRM, (void (*)(int)) resend_window) == SIG_ERR) {
-        perror("Unable to catch SIGALRM");
-        exit(1);
-    }
+    //setup retransmisison timer
     time_out_val.it_value.tv_sec = TIMEOUT/1000;
-    time_out_val.it_value.tv_usec = (TIMEOUT*1000) % 1000000;   
+    time_out_val.it_value.tv_usec = TIMEOUT*1000;   
     time_out_val.it_interval = time_out_val.it_value;
 
+    //setup cancel timer
+    time_out_val.it_value.tv_sec = 0;
+    time_out_val.it_value.tv_usec = 0;   
+    time_out_val.it_interval = time_out_val.it_value;
 
+    // bind SIGALRM with callback function
+    if (signal(SIGALRM, (void (*)(int)) resend_window) == SIG_ERR) {
+        error("ERROR Unable to catch SIGALRM");
+    }
+
+    //setup select wait timer
     struct timeval tv;
     tv.tv_sec = 1;
     tv.tv_usec = 0;
@@ -126,91 +101,10 @@ int main(int argc, char *argv[])
         FD_ZERO(&readfds);
         FD_SET(sockfd, &readfds);
 
-        if(select(sockfd+1, &readfds, NULL, NULL, &tv) < 0){// select failure
-            printf("select error\n");
-            if(resend == 1){
-                printf("0 ========= Timer expired, resend pkt from %d\n", base);
-                //send data while there are remaining data in the window
-                while (nextSeqNum < base + win_size && nextSeqNum <= lastDataSeqNum)
-                {
-                    if(nextSeqNum == base){ //when sending first packet
-
-                        // setting timer
-                        time_out_val.it_value.tv_sec = TIMEOUT/1000;
-                        time_out_val.it_value.tv_usec = (TIMEOUT*1000) % 1000000;   
-                        time_out_val.it_interval = time_out_val.it_value;
-                        if (setitimer(ITIMER_REAL, &time_out_val, NULL) == -1) {
-                           perror("error calling setitimer()");
-                           exit(1);
-                        }
-                        else{
-                            resend = 0;
-                            printf("Reset timer because resending from %d\n", base);
-                        }
-                    }
-                    out_pkt.type = DATA;
-                    out_pkt.seqnum = nextSeqNum;
-                    out_pkt.size = get_file_segment(nextSeqNum, file_ptr, out_pkt.data, PACKET_SIZE, file_size);
-                    
-                    // check if it's last packet
-                    if(nextSeqNum == lastDataSeqNum)
-                        out_pkt.ending_flag = 1;
-
-                    
-                    if (sendto(sockfd, &out_pkt, sizeof(out_pkt), 0, (struct sockaddr*) &rcv_addr, rcv_len) == -1)
-                        error("ERROR on sending file request packet after receiving ACK\n");  
-                    print_packet(out_pkt, 0, 0);// send request pakcet, print data
-
-                    nextSeqNum++;
-                }  
-                resend = 0;
-            }                  
-        } 
-        // receive packet
-        else if (FD_ISSET(sockfd, &readfds)) 
+        if(select(sockfd+1, &readfds, NULL, NULL, &tv))
         {
-            FD_SET(sockfd, &readfds);
-
-            if(resend == 1){
-                printf("1 ========= Timer expired, resend pkt from %d\n", base);
-                //send data while there are remaining data in the window
-                while (nextSeqNum < base + win_size && nextSeqNum <= lastDataSeqNum)
-                {
-                    if(nextSeqNum == base){ //when sending first packet
-
-                        // setting timer
-                        time_out_val.it_value.tv_sec = TIMEOUT/1000;
-                        time_out_val.it_value.tv_usec = (TIMEOUT*1000) % 1000000;   
-                        time_out_val.it_interval = time_out_val.it_value;
-                        if (setitimer(ITIMER_REAL, &time_out_val, NULL) == -1) {
-                           perror("error calling setitimer()");
-                           exit(1);
-                        }
-                        else{
-                            resend = 0;
-                            printf("Reset timer because resending from %d\n", base);
-                        }
-                    }
-                    out_pkt.type = DATA;
-                    out_pkt.seqnum = nextSeqNum;
-                    out_pkt.size = get_file_segment(nextSeqNum, file_ptr, out_pkt.data, PACKET_SIZE, file_size);
-                    
-                    // check if it's last packet
-                    if(nextSeqNum == lastDataSeqNum)
-                        out_pkt.ending_flag = 1;
-
-                    
-                    if (sendto(sockfd, &out_pkt, sizeof(out_pkt), 0, (struct sockaddr*) &rcv_addr, rcv_len) == -1)
-                        error("ERROR on sending file request packet after receiving ACK\n");  
-                    print_packet(out_pkt, 0, 0);// send request pakcet, print data
-
-                    nextSeqNum++;
-                }  
-                resend = 0;
-            }      
-
             //receive data
-            if (recvfrom(sockfd, &in_pkt, sizeof(in_pkt), 0, (struct sockaddr*) &rcv_addr, &rcv_len) == -1){
+            if (recvfrom(sockfd, &in_pkt, sizeof(in_pkt), 0, (struct sockaddr*) &rcv_addr, &rcv_addr_len) == -1){
                 error("ERROR on receiving file request packet");
             }
             print_packet(in_pkt, 1, 0); // receive request, print request
@@ -218,243 +112,104 @@ int main(int argc, char *argv[])
             //if received DATA
             if(in_pkt.type == DATA)
             {
-                if(debug) printf("---- In select DATA\n");
-
-                //store received packet
-                if (in_pkt.seqnum == expSeqNum)
+                //if(debug) printf("[TRANSMIT]: received DATA\n");
+                //grow receiver buffer as needed
+                if(rcvBufferIndex + in_pkt.size >= rcvBufferSize)
                 {
-                    if (debug) printf("Packet seqnum %d stored\t", in_pkt.seqnum);
-                    if(rcvBufferIndex + in_pkt.size >= rcvBufferSize)
-                    {
-                        rcvBuffer = (char*)realloc(rcvBuffer, rcvBufferSize+RECEIVE_BUFFER_SIZE);
-                        rcvBufferSize += RECEIVE_BUFFER_SIZE;
-                    }
-                    memcpy(rcvBuffer+rcvBufferIndex, &in_pkt.data, in_pkt.size);
-                    rcvBufferIndex += in_pkt.size; 
-                    expSeqNum++;
-
-                    //transition state if completed receiving
-                    if(in_pkt.ending_flag == 1)
-                    {
-                        if (debug) printf("(last pkt)");
-                        state = PROCESSING;
-                    }
-                    if (debug) printf("\n");
+                    rcvBuffer = (char*)realloc(rcvBuffer, sizeof(char)*(rcvBufferSize+RECEIVE_BUFFER_SIZE));
+                    rcvBufferSize += RECEIVE_BUFFER_SIZE;
                 }
-                else
+                int received = rdt_receive_data(rcvBuffer, &rcvBufferIndex, sockfd, &rcv_addr);
+                if(received == 0 && in_pkt.ending_flag == 1)
                 {
-                    if (debug) printf("***** Packet seqnum %d dropped\n", in_pkt.seqnum);
+                    state = PROCESSING;
                 }
-
-                //Enhancement: create a ACK specific package to reduce ACK size
-                out_pkt.type = ACK;
-                out_pkt.seqnum = expSeqNum - 1;
-                out_pkt.size = 0;
-                
-                if (sendto(sockfd, &out_pkt, sizeof(out_pkt), 0, (struct sockaddr*) &rcv_addr, rcv_len) == -1)
-                    error("ERROR on sending file requack ACK after received request\n");     
-                print_packet(out_pkt, 0, 0);// send request pakcet, print data
-
             }
             else //if received ACK
             {
-                if(debug) printf("---- In select ACK\n");
-
-                // lose this ACK (didn't receive)
-                if(simulate(loss_rate)){
-                    printf("Simulate didn't get ACK %d\n", in_pkt.seqnum);
-                    continue;
+                //if(debug) printf("[TRANSMIT]: received ACK\n");
+                int received = rdt_receive_ack(sockfd, &rcv_addr, file_ptr, file_size);
+                if(received == 0 && in_pkt.seqnum == lastDataSeqNum){
+                    if(debug) printf("File transfer completed\n");
+                    //reinitialize for next transmission
+                    rdt_init();
                 }
-                else if (simulate(corrupt_rate)) {
-                    printf("Simulate ACK %d is corrupted\n", in_pkt.seqnum);
-                    continue;
-                }
-                //receive acknowledgement
-                if (in_pkt.seqnum >= base)
-                {
-                    //sliding sending window
-                    base = in_pkt.seqnum + 1; //in_pkt.seqnum -> ack num
-
-                    if(base > lastDataSeqNum){
-                        printf("File transfer completed\n");
-                        exit(1);
-                    }    
-                    // setting timer
-                    time_out_val.it_value.tv_sec = TIMEOUT/1000;
-                    time_out_val.it_value.tv_usec = (TIMEOUT*1000) % 1000000;   
-                    time_out_val.it_interval = time_out_val.it_value;
-                    if (setitimer(ITIMER_REAL, &time_out_val, NULL) == -1) {
-                       perror("error calling setitimer()");
-                       exit(1);
-                    }
-                    else{
-                        resend = 0;
-                        printf("Reset timer because get ACK %d\n", in_pkt.seqnum);
-                    }               
-                }
-
-                //send data while there are remaining data in the window
-                while (nextSeqNum < base + win_size && nextSeqNum <= lastDataSeqNum)
-                {
-                    
-                    if(nextSeqNum == base){ //when sending first packet
-                        // setting timer
-                        time_out_val.it_value.tv_sec = TIMEOUT/1000;
-                        time_out_val.it_value.tv_usec = (TIMEOUT*1000) % 1000000;   
-                        time_out_val.it_interval = time_out_val.it_value;
-                        if (setitimer(ITIMER_REAL, &time_out_val, NULL) == -1) {
-                           perror("error calling setitimer()");
-                           exit(1);
-                        }
-                        else{
-                            resend = 0;
-                            printf("Reset timer because resending from %d\n", base);
-                        }
-                    }
-                    out_pkt.type = DATA;
-                    out_pkt.seqnum = nextSeqNum;
-                    out_pkt.size = get_file_segment(nextSeqNum, file_ptr, out_pkt.data, PACKET_SIZE, file_size);
-                    
-                    // check if it's last packet
-                    if(nextSeqNum == lastDataSeqNum)
-                        out_pkt.ending_flag = 1;
-
-                    
-                    if (sendto(sockfd, &out_pkt, sizeof(out_pkt), 0, (struct sockaddr*) &rcv_addr, rcv_len) == -1)
-                        error("ERROR on sending file request packet after receiving ACK\n");  
-                    print_packet(out_pkt, 0, 0);// send request pakcet, print data
-
-                    nextSeqNum++;
-                }
-
             }
         }
         else
         {
-            FD_SET(sockfd, &readfds);
-            if(debug) printf("----- not in select\n");
-
-            if(resend == 1){
-                printf("2 ========= Timer expired, resend pkt from %d\n", base);
-                //send data while there are remaining data in the window
-                while (nextSeqNum < base + win_size && nextSeqNum <= lastDataSeqNum)
-                {
-                    if(nextSeqNum == base){ //when sending first packet
-                        // setting timer
-                        time_out_val.it_value.tv_sec = TIMEOUT/1000;
-                        time_out_val.it_value.tv_usec = (TIMEOUT*1000) % 1000000;   
-                        time_out_val.it_interval = time_out_val.it_value;
-                        if (setitimer(ITIMER_REAL, &time_out_val, NULL) == -1) {
-                           perror("error calling setitimer()");
-                           exit(1);
-                        }
-                        else{
-                            resend = 0;
-                            printf("Reset timer because resending from %d\n", base);
-                        }
-                    }
-                    out_pkt.type = DATA;
-                    out_pkt.seqnum = nextSeqNum;
-                    out_pkt.size = get_file_segment(nextSeqNum, file_ptr, out_pkt.data, PACKET_SIZE, file_size);
-                    
-                    // check if it's last packet
-                    if(nextSeqNum == lastDataSeqNum)
-                        out_pkt.ending_flag = 1;
-
-                    
-                    if (sendto(sockfd, &out_pkt, sizeof(out_pkt), 0, (struct sockaddr*) &rcv_addr, rcv_len) == -1)
-                        error("ERROR on sending file request packet after receiving ACK\n");  
-                    print_packet(out_pkt, 0, 0);// send request pakcet, print data
-
-                    nextSeqNum++;
-                }  
-                resend = 0;
-            }      
-
-            if(state == WAITING)
+            if (state == RETRANSMIT)
             {
-                if(debug) printf("waiting %d\n", state);           
+                if(debug) printf("[RETRANSMIT]: resend pkt from %d\n", base);
+
+                nextSeqNum = base;
+                rdt_send(sockfd, &rcv_addr, file_ptr, file_size, DATA);
+
+                if (signal(SIGALRM, (void (*)(int)) resend_window) == SIG_ERR) {
+                    error("ERROR Unable to catch SIGALRM");
+                }
+                state = WAITING;
             }
-            
-            if(state == PROCESSING)
+            else if(state == PROCESSING)
             {
-                //if file exist, open file
-                //if file doens't exist, save error message into buffer
+                if(debug) printf("[PROCESSING]: Process request: %s\n", rcvBuffer);
 
-                // check if file exist
-                if(debug) printf("Process request: %s\n", rcvBuffer);
-
-                size_t readResult;
-                
                 //Open file and read
-                FILE* file = fopen ( rcvBuffer , "r" );
+                //file name is sent as a string with ending \0
+                FILE* file = fopen(rcvBuffer , "r");
+                //If the file does not exist
+                packet_type_t packet_type;
+                if(file == NULL){
+                    //error("ERROR 404: File not found\n");
+                    packet_type = ERR;
+                    file_ptr = "File requested not found";
+                    file_size = strlen(file_ptr)+1;
+                    
+                }
+                else{
+                    //Obtain file size:
+                    //fseek: Reposition stream position indicator
+                    //SEEK_END: End of file
+                    packet_type = DATA;
+                    fseek(file , 0 , SEEK_END);
+                    file_size = ftell(file); //Get current position in stream
+                    rewind(file); //Set position of stream to the beginning
 
-                if(file == NULL) { //If the file does not exist
-                  error("404: File not found\n");
+                    // allocate memory to contain the whole file:
+                    file_ptr = (char*) malloc(sizeof(char)*file_size);
+                    if(file_ptr == NULL) error("ERROR Memory error");
+
+                    // copy the file into the buffer:
+                    size_t readResult;
+                    readResult = fread(file_ptr,1,file_size,file);
+                    if(readResult != file_size) error("ERROR Reading error");
+
                 }
 
-                //Obtain file size:
-                //fseek: Reposition stream position indicator
-                //SEEK_END: End of file
-                fseek (file , 0 , SEEK_END);
-                file_size = ftell (file); //Get current position in stream
-                rewind (file); //Set position of stream to the beginning
-
-                // allocate memory to contain the whole file:
-                file_ptr = (char*) malloc (sizeof(char)*file_size);
-                if (file_ptr == NULL) error("Memory error");
-
-                // copy the file into the buffer:
-                readResult = fread (file_ptr,1,file_size,file);
-                if (readResult != file_size) error("Reading error");
-                  //write(newsockfd, "Reading error\r\n", 15);
-
-
-                lastDataSeqNum =  file_size/PACKET_SIZE;
+                // take the ceiling
+                lastDataSeqNum = file_size/PACKET_SIZE;
                 if(file_size % PACKET_SIZE != 0)
                     lastDataSeqNum += 1;
                 
-                printf("file_size: %d\tlastDataSeqNum: %d\n", file_size, lastDataSeqNum);
+                if(debug) printf("[PROCESSING]: file_size: %d\tlastDataSeqNum: %d\n", file_size, lastDataSeqNum);
 
-                while (nextSeqNum < base + win_size && nextSeqNum <= lastDataSeqNum)
-                {
-                    
-                    if(nextSeqNum == base){ //when sending first packet
-                        // setting timer
-                        time_out_val.it_value.tv_sec = TIMEOUT/1000;
-                        time_out_val.it_value.tv_usec = (TIMEOUT*1000) % 1000000;   
-                        time_out_val.it_interval = time_out_val.it_value;                        
-                        if (setitimer(ITIMER_REAL, &time_out_val, NULL) == -1) {
-                           perror("error calling setitimer()");
-                           exit(1);
-                        }
-                        else{
-                            resend = 0;
-                            printf("Set timer because sending first pkt\n");
-                        }
-                    }
-                    
-                    out_pkt.type = DATA;
-                    out_pkt.seqnum = nextSeqNum;
-                    out_pkt.size = get_file_segment(nextSeqNum, file_ptr, out_pkt.data, PACKET_SIZE, file_size);
-                    
-                    // check if it's last packet
-                    if(nextSeqNum == lastDataSeqNum)
-                        out_pkt.ending_flag = 1;
+                rdt_send(sockfd, &rcv_addr, file_ptr, file_size, packet_type);
 
-                    if (sendto(sockfd, &out_pkt, sizeof(out_pkt), 0, (struct sockaddr*) &rcv_addr, rcv_len) == -1)
-                        error("ERROR on sending file request packet\n");  
-                    print_packet(out_pkt, 0, 0);// send request pakcet, print data
+                //reset the receiver buffer
+                free(rcvBuffer);
+                rcvBufferSize = RECEIVE_BUFFER_SIZE;
+                rcvBufferIndex = 0;
+                rcvBuffer = (char*)malloc(sizeof(char) * RECEIVE_BUFFER_SIZE);
 
-                    nextSeqNum++;
-                }
                 state = WAITING;
-
             }
-
+            else //state == WAITING
+            {
+                if(debug) printf("[WAITING]: ...\n");           
+            }
         }
     }
-    free(rcvBuffer);
+    
 
     return 0; 
 }
