@@ -1,12 +1,14 @@
 #define PACKET_SIZE 		1024
-#define TIMEOUT				100						//in miliseconds 		
+#define TIMEOUT				100	//in miliseconds 		
 
 //state constant
 #define WAITING     		0
 #define PROCESSING  		1
 #define RETRANSMIT  		2
 #define ERROR  				3
+#define TRANSMITTING		4
 
+void resend_window(int sig);
 
 int debug = 1;
 
@@ -21,8 +23,8 @@ typedef struct {
 }packet_t;
 
 //Global variable
+volatile sig_atomic_t state;
 packet_t in_pkt, out_pkt;
-int state;
 double loss_rate, corrupt_rate;
 struct itimerval time_out_val, time_out_cancel;
 
@@ -47,13 +49,13 @@ void print_packet(packet_t pkt, int receive_pkt, int print_data){
 	else if(receive_pkt == 0)	printf("Send pkt: ");
 	else						printf("Lose pkt: ");
 
-	if(pkt.type == ACK)	printf("Type: Ack \t");
-	else				printf("Type: Data\t");
+	if(pkt.type == ACK)			printf("Type: Ack \t");
+	else						printf("Type: Data\t");
 
 	printf(" %d \t size: %d \t", pkt.seqnum, pkt.size);
 
-	if(print_data == 1)	printf("Data: %s\n", pkt.data);
-	else				printf("\n");
+	if(print_data == 1)			printf("Data: %s\n", pkt.data);
+	else						printf("\n");
 }
 
 void error(char *msg)
@@ -89,19 +91,18 @@ int simulate(double probability) {
 int rdt_receive_data(char* rcvBuffer, unsigned int* rcvBufferIndex, int sockfd, struct sockaddr_in* addr_ptr)
 { 
 	int r = -1;
-	// Simulate packet loss and corruption
-    int loss = simulate(loss_rate);
-    int corrupt = simulate(corrupt_rate);
 
-    if (loss)
+    if (simulate(loss_rate))
     {
     	if(debug) printf("Simulate DATA packet loss (seqnum %d)\n", in_pkt.seqnum);
+    	return r;
     }
-    else if(corrupt)
+
+    if(simulate(corrupt_rate))
     {
     	if(debug) printf("Simulate DATA packet corruption (seqnum %d)\n", in_pkt.seqnum);
     }
-    if (in_pkt.seqnum == expSeqNum)
+    else if (in_pkt.seqnum == expSeqNum)
     {
         if(debug) printf("Packet seqnum %d stored\t", in_pkt.seqnum);
 
@@ -140,6 +141,11 @@ void rdt_send(int sockfd, struct sockaddr_in* addr_ptr, char* file_ptr, int file
     {
         if(nextSeqNum == base){ //when sending first packet
             // start timer
+            if(debug) printf("timer started\n");
+            //struct itimerval time_out_val;
+      //       time_out_val.it_value.tv_sec = TIMEOUT/1000;
+		    // time_out_val.it_value.tv_usec = (TIMEOUT*1000)%1000000;   
+		    // time_out_val.it_interval = time_out_val.it_value;
             if (setitimer(ITIMER_REAL, &time_out_val, NULL) == -1) {
                error("ERROR calling setitimer");
             }
@@ -159,19 +165,28 @@ void rdt_send(int sockfd, struct sockaddr_in* addr_ptr, char* file_ptr, int file
     }  
 }
 
+
+void rdt_retransmit(int sockfd, struct sockaddr_in* addr_ptr, char* file_ptr, int file_size, packet_type_t packet_type)
+{
+	nextSeqNum = base;
+    rdt_send(sockfd, addr_ptr, file_ptr, file_size, DATA);
+
+    if (signal(SIGALRM, (void (*)(int)) resend_window) == SIG_ERR) {
+        error("ERROR Unable to catch SIGALRM");
+    }
+}
+
 //returns -1 if data is corrupted or lost
 //returns 0 if data is received
 int rdt_receive_ack(int sockfd, struct sockaddr_in* addr_ptr, char* file_ptr, int file_size)
 {
 	int r = -1;
-	int loss = simulate(loss_rate);
-    int corrupt = simulate(corrupt_rate);
 
-    if (loss)
+    if (simulate(loss_rate))
     {
     	if(debug) printf("Simulate ACK packet loss (seqnum %d)\n", in_pkt.seqnum);
     }
-    else if(corrupt)
+    else if(simulate(corrupt_rate))
     {
     	if(debug) printf("Simulate ACK packet corruption (seqnum %d)\n", in_pkt.seqnum);
     }
@@ -183,13 +198,23 @@ int rdt_receive_ack(int sockfd, struct sockaddr_in* addr_ptr, char* file_ptr, in
         // setting timer
         if(base == nextSeqNum)
         {
+            if(debug) printf("timer cancelled\n");
+      		//struct itimerval time_out_cancel;
+      // 		time_out_cancel.it_value.tv_sec = 0;
+		    // time_out_cancel.it_value.tv_usec = 0;   
+		    // time_out_cancel.it_interval = time_out_cancel.it_value;
             if (setitimer(ITIMER_REAL, &time_out_cancel, NULL) == -1) {
-                error("ERROR error calling setitimer()");
+                error("ERROR calling setitimer()");
             }
         }
         else{
+            if(debug) printf("timer started\n");
+      		//struct itimerval time_out_val;
+      // 		time_out_val.it_value.tv_sec = TIMEOUT/1000;
+		    // time_out_val.it_value.tv_usec = (TIMEOUT*1000)%1000000;   
+		    // time_out_val.it_interval = time_out_val.it_value;
             if (setitimer(ITIMER_REAL, &time_out_val, NULL) == -1) {
-                error("ERROR error calling setitimer()");
+                error("ERROR calling setitimer()");
             }
         } 
         r = 0;           

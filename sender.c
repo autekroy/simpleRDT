@@ -10,8 +10,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/wait.h>	/* for the waitpid() system call */
-#include <signal.h>	    /* signal name macros, and the kill() prototype */
-#include <sys/time.h>   // for setitimer
+#include <sys/time.h>        /* for setitimer */
+#include <unistd.h>     /* for pause */
+#include <signal.h>     /* for signal */
 #include "packet.h"
 
 #define SEND_BUFFER_SIZE        PACKET_SIZE     //in bytes
@@ -20,8 +21,11 @@
 void resend_window(int sig)
 {
     //retransmit everything in my window
-    printf("========= Timer expired on %d\n", base);
     state = RETRANSMIT;
+    printf("========= Timer expired on seqnum = %d state = %d\n", base, state);
+    // if (signal(SIGALRM, (void (*)(int)) resend_window) == SIG_ERR) {
+    //     error("ERROR Unable to catch SIGALRM");
+    // }
 }
 
 int main(int argc, char *argv[])
@@ -78,13 +82,14 @@ int main(int argc, char *argv[])
 
     //setup retransmisison timer
     time_out_val.it_value.tv_sec = TIMEOUT/1000;
-    time_out_val.it_value.tv_usec = TIMEOUT*1000;   
-    time_out_val.it_interval = time_out_val.it_value;
+    time_out_val.it_value.tv_usec = (TIMEOUT*1000)%1000000;   
+    time_out_val.it_interval.tv_sec = 0;
+    time_out_val.it_interval.tv_usec = 0;
 
     //setup cancel timer
-    time_out_val.it_value.tv_sec = 0;
-    time_out_val.it_value.tv_usec = 0;   
-    time_out_val.it_interval = time_out_val.it_value;
+    time_out_cancel.it_value.tv_sec = 0;
+    time_out_cancel.it_value.tv_usec = 0;   
+    time_out_cancel.it_interval = time_out_cancel.it_value;
 
     // bind SIGALRM with callback function
     if (signal(SIGALRM, (void (*)(int)) resend_window) == SIG_ERR) {
@@ -93,7 +98,7 @@ int main(int argc, char *argv[])
 
     //setup select wait timer
     struct timeval tv;
-    tv.tv_sec = 1;
+    tv.tv_sec = 0;
     tv.tv_usec = 0;
 
     while(1)
@@ -132,23 +137,20 @@ int main(int argc, char *argv[])
                 if(received == 0 && in_pkt.seqnum == lastDataSeqNum){
                     if(debug) printf("File transfer completed\n");
                     //reinitialize for next transmission
-                    rdt_init();
+                    //rdt_init();
+                    exit(0);
+                    //state = WAITING;
                 }
+
             }
         }
         else
         {
             if (state == RETRANSMIT)
             {
-                if(debug) printf("[RETRANSMIT]: resend pkt from %d\n", base);
-
-                nextSeqNum = base;
-                rdt_send(sockfd, &rcv_addr, file_ptr, file_size, DATA);
-
-                if (signal(SIGALRM, (void (*)(int)) resend_window) == SIG_ERR) {
-                    error("ERROR Unable to catch SIGALRM");
-                }
-                state = WAITING;
+                if(debug) printf("[RETRANSMIT]: resend pkt from seqnum %d\n", base);
+                rdt_retransmit(sockfd, &rcv_addr, file_ptr, file_size, DATA);
+                state = TRANSMITTING;
             }
             else if(state == PROCESSING)
             {
@@ -201,10 +203,11 @@ int main(int argc, char *argv[])
                 rcvBufferIndex = 0;
                 rcvBuffer = (char*)malloc(sizeof(char) * RECEIVE_BUFFER_SIZE);
 
-                state = WAITING;
+                state = TRANSMITTING;
             }
-            else //state == WAITING
+            else if(state == WAITING)
             {
+                sleep(1);
                 if(debug) printf("[WAITING]: ...\n");           
             }
         }
