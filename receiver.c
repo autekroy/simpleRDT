@@ -204,7 +204,8 @@ int main(int argc, char *argv[])
                 fwrite (rcvBuffer , sizeof(char), rcvBufferIndex, new_file);
                 fclose (new_file);
 
-                exit(0);
+                state = WAITING;
+                //exit(0);
 
                 // //reset the receiver buffer
                 // free(rcvBuffer);

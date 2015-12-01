@@ -8,6 +8,13 @@
 #define ERROR  				3
 #define TRANSMITTING		4
 
+/*
+Enchancements
+1. Sender and receiver constantly running (do not exit)
+2. Initial receiver's file request should be accomplished via rdt_send
+3. If error was retransmitted, it was sent as packet type DATA instead of ERR
+*/
+
 void resend_window(int sig);
 
 int debug = 1;

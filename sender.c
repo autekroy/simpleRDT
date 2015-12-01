@@ -30,6 +30,8 @@ void resend_window(int sig)
 
 int main(int argc, char *argv[])
 {
+    int file_found = 0;
+
     int sockfd, portno;
     struct sockaddr_in snd_addr, rcv_addr;
     char* file_ptr;
@@ -138,8 +140,8 @@ int main(int argc, char *argv[])
                     if(debug) printf("File transfer completed\n");
                     //reinitialize for next transmission
                     //rdt_init();
-                    exit(0);
-                    //state = WAITING;
+                    //exit(0);
+                    state = WAITING;
                 }
 
             }
@@ -149,7 +151,10 @@ int main(int argc, char *argv[])
             if (state == RETRANSMIT)
             {
                 if(debug) printf("[RETRANSMIT]: resend pkt from seqnum %d\n", base);
-                rdt_retransmit(sockfd, &rcv_addr, file_ptr, file_size, DATA);
+                if (file_found)
+                    rdt_retransmit(sockfd, &rcv_addr, file_ptr, file_size, DATA);
+                else
+                    rdt_retransmit(sockfd, &rcv_addr, file_ptr, file_size, ERR);
                 state = TRANSMITTING;
             }
             else if(state == PROCESSING)
@@ -172,6 +177,8 @@ int main(int argc, char *argv[])
                     //Obtain file size:
                     //fseek: Reposition stream position indicator
                     //SEEK_END: End of file
+                    file_found = 1;
+
                     packet_type = DATA;
                     fseek(file , 0 , SEEK_END);
                     file_size = ftell(file); //Get current position in stream
