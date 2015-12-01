@@ -151,7 +151,7 @@ int main(int argc, char *argv[])
             if (state == RETRANSMIT)
             {
                 if(debug) printf("[RETRANSMIT]: resend pkt from seqnum %d\n", base);
-                if (file_found)
+                if (file_found == 1)
                     rdt_retransmit(sockfd, &rcv_addr, file_ptr, file_size, DATA);
                 else
                     rdt_retransmit(sockfd, &rcv_addr, file_ptr, file_size, ERR);

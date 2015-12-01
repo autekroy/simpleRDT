@@ -57,6 +57,7 @@ void print_packet(packet_t pkt, int receive_pkt, int print_data){
 	else						printf("Lose pkt: ");
 
 	if(pkt.type == ACK)			printf("Type: Ack \t");
+    else if(pkt.type == ERR)    printf("Type: ERR \t");
 	else						printf("Type: Data\t");
 
 	printf(" %d \t size: %d \t", pkt.seqnum, pkt.size);
@@ -176,7 +177,7 @@ void rdt_send(int sockfd, struct sockaddr_in* addr_ptr, char* file_ptr, int file
 void rdt_retransmit(int sockfd, struct sockaddr_in* addr_ptr, char* file_ptr, int file_size, packet_type_t packet_type)
 {
 	nextSeqNum = base;
-    rdt_send(sockfd, addr_ptr, file_ptr, file_size, DATA);
+    rdt_send(sockfd, addr_ptr, file_ptr, file_size, packet_type);
 
     if (signal(SIGALRM, (void (*)(int)) resend_window) == SIG_ERR) {
         error("ERROR Unable to catch SIGALRM");
