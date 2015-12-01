@@ -1,5 +1,5 @@
 #define PACKET_SIZE 		1024
-#define TIMEOUT				100	//in miliseconds 		
+#define TIMEOUT				200	//in miliseconds 		
 
 //state constant
 #define WAITING     		0
@@ -7,6 +7,7 @@
 #define RETRANSMIT  		2
 #define ERROR  				3
 #define TRANSMITTING		4
+#define REQUEST             5
 
 /*
 Enchancements

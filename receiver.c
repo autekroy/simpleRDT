@@ -77,20 +77,20 @@ int main(int argc, char *argv[])
     snd_addr.sin_port = htons(portno);
     // socket doesn't need to bind(), we just let OS assign a port number automatically
 
-    // Build a request packet
-    printf("Building request packet for file: %s\n", filename);
-    out_pkt.type = DATA;
-    out_pkt.seqnum = 1;
-    out_pkt.ending_flag = 1;
-    out_pkt.size = strlen(filename) + 1;// string end character
-    strcpy(out_pkt.data, filename);
+    // // Build a request packet
+    // printf("Building request packet for file: %s\n", filename);
+    // out_pkt.type = DATA;
+    // out_pkt.seqnum = 1;
+    // out_pkt.ending_flag = 1;
+    // out_pkt.size = strlen(filename) + 1;// string end character
+    // strcpy(out_pkt.data, filename);
 
-    // Send request packet
-    print_packet(out_pkt, 0, 0);// send request pakcet, print data
-    lastDataSeqNum = 1;
-    if (sendto(sockfd, &out_pkt, sizeof(out_pkt), 0, (struct sockaddr*) &snd_addr, sizeof(snd_addr)) == -1)
-        error("ERROR on sending file request packet");
-    nextSeqNum += 1;
+    // // Send request packet
+    // print_packet(out_pkt, 0, 0);// send request pakcet, print data
+    // lastDataSeqNum = 1;
+    // if (sendto(sockfd, &out_pkt, sizeof(out_pkt), 0, (struct sockaddr*) &snd_addr, sizeof(snd_addr)) == -1)
+    //     error("ERROR on sending file request packet");
+    // nextSeqNum += 1;
 
     // char* sndBuffer[SEND_BUFFER_SIZE];
     // memset(sndBuffer, '\0', SEND_BUFFER_SIZE);
@@ -121,7 +121,7 @@ int main(int argc, char *argv[])
     tv.tv_usec = 0;
 
     //initialize state
-    state = TRANSMITTING;
+    state = REQUEST;
 
     //Declare readfds for select
     fd_set readfds;
@@ -171,7 +171,19 @@ int main(int argc, char *argv[])
         }
         else
         {
-            if (state == RETRANSMIT)
+            if (state == REQUEST)
+            {
+                file_ptr = filename;
+                file_size = strlen(file_ptr)+1;
+                lastDataSeqNum = file_size/PACKET_SIZE;
+                if(file_size % PACKET_SIZE != 0)
+                    lastDataSeqNum += 1;
+                if(debug) printf("[REQUEST]: file_size: %d\tlastDataSeqNum: %d\n", file_size, lastDataSeqNum);
+
+                rdt_send(sockfd, &snd_addr, file_ptr, file_size, DATA);
+                state = TRANSMITTING;
+            }
+            else if (state == RETRANSMIT)
             {
                 if(debug) printf("[RETRANSMIT]: resend pkt from seqnum%d\n", base);
                 rdt_retransmit(sockfd, &snd_addr, file_ptr, file_size, DATA);
