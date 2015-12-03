@@ -31,7 +31,7 @@ typedef struct {
 }packet_t;
 
 //Global variable
-volatile sig_atomic_t state;
+int state;
 packet_t in_pkt, out_pkt;
 double loss_rate, corrupt_rate;
 struct itimerval time_out_val, time_out_cancel;
@@ -136,7 +136,7 @@ int rdt_receive_data(char* rcvBuffer, unsigned int* rcvBufferIndex, int sockfd, 
     out_pkt.type = ACK;
     out_pkt.seqnum = expSeqNum - 1;
     out_pkt.size = 0;
-    
+    addr_ptr->sin_family = AF_INET;
     if (sendto(sockfd, &out_pkt, sizeof(out_pkt), 0, (struct sockaddr*) addr_ptr, sizeof(struct sockaddr_in)) == -1)
         error("ERROR on sending ACK packet\n");     
     print_packet(out_pkt, 0, 0);// send request packet, print data
@@ -151,10 +151,6 @@ void rdt_send(int sockfd, struct sockaddr_in* addr_ptr, char* file_ptr, int file
         if(nextSeqNum == base){ //when sending first packet
             // start timer
             if(debug) printf("timer started\n");
-            //struct itimerval time_out_val;
-      //       time_out_val.it_value.tv_sec = TIMEOUT/1000;
-		    // time_out_val.it_value.tv_usec = (TIMEOUT*1000)%1000000;   
-		    // time_out_val.it_interval = time_out_val.it_value;
             if (setitimer(ITIMER_REAL, &time_out_val, NULL) == -1) {
                error("ERROR calling setitimer");
             }
@@ -165,7 +161,7 @@ void rdt_send(int sockfd, struct sockaddr_in* addr_ptr, char* file_ptr, int file
         
         // check if it's last packet
         out_pkt.ending_flag = (nextSeqNum == lastDataSeqNum)?1:0;
-
+        addr_ptr->sin_family = AF_INET;
         if (sendto(sockfd, &out_pkt, sizeof(out_pkt), 0, (struct sockaddr*) addr_ptr, sizeof(struct sockaddr_in)) == -1)
             error("ERROR on sending DATA packet\n");  
         print_packet(out_pkt, 0, 0);// send request pakcet, print data
@@ -208,20 +204,12 @@ int rdt_receive_ack(int sockfd, struct sockaddr_in* addr_ptr, char* file_ptr, in
         if(base == nextSeqNum)
         {
             if(debug) printf("timer cancelled\n");
-      		//struct itimerval time_out_cancel;
-      // 		time_out_cancel.it_value.tv_sec = 0;
-		    // time_out_cancel.it_value.tv_usec = 0;   
-		    // time_out_cancel.it_interval = time_out_cancel.it_value;
             if (setitimer(ITIMER_REAL, &time_out_cancel, NULL) == -1) {
                 error("ERROR calling setitimer()");
             }
         }
         else{
             if(debug) printf("timer started\n");
-      		//struct itimerval time_out_val;
-      // 		time_out_val.it_value.tv_sec = TIMEOUT/1000;
-		    // time_out_val.it_value.tv_usec = (TIMEOUT*1000)%1000000;   
-		    // time_out_val.it_interval = time_out_val.it_value;
             if (setitimer(ITIMER_REAL, &time_out_val, NULL) == -1) {
                 error("ERROR calling setitimer()");
             }
@@ -231,88 +219,3 @@ int rdt_receive_ack(int sockfd, struct sockaddr_in* addr_ptr, char* file_ptr, in
     rdt_send(sockfd, addr_ptr, file_ptr, file_size, DATA);
     return r;
 }
-
-
-
-/*
-int rdt_send(char* buffer, int length, int sockfd, struct sockaddr addr, int cwnd)
-{
-
-	// signal(SIGALRM, alarm_handler);
-
-	initialize variables
-	totalpacket = 
-
-	int base = 1 //starting sequence number from 1
-
-	send initial window of packets
-
-	receive initial acknowledgement
-
-
-	while (base < totalpacket)
-	{
-		if(select (int maxfdp, fd_set *readset, fd_set *writeset, fd_set*excepset, TIMEOUT))
-		//returns the number of socket descriptor 
-		{
-			
-			//receive acknowledgement
-			if (ack_num >= base)
-				sliding sending window -> base = ack_num + 1
-				If(base==nextseqnum)
-		            setitimer(0)
-				else 
-					setitimer(TIMEOUT)
-			//add print statement
-
-			//send data
-			while there are remaining data in the window
-				if(nextseqnum == base) //when sending first packet
-					setitimer(TIMEOUT)
-				build_data(DATA, buffer) //set end_flag header as necessary
-				udt_send(data)
-				nextseqnum++
-			//add print statement
-	}		
-	return 0;
-	
-
-	return -1;
-
-}
-*/
-
-
-//return pointer to 
-// char* rdt_receive(int* length, int sockfd, struct sockaddr addr)
-// {
-/*
-
-	receive the first packet that declares the number of packets (blocking)
-	send ACK
-
-	initialize variables
-	int expectedseqnum = 1;
-
-	while(expectedseqnum < totalpacket){
-		select (int maxfdp, fd_set *readset, fd_set *writeset, fd_set*excepset, TIMEOUT)
-		{
-			
-			process_data (int& seqnum)
-			if (seqnum == 1)
-				initialization work
-				char* buffer and dynamically allocate buffer
-
-			if (seqnum == expectedseqnum)
-				append_data(data)
-				build_data(ACK, expectedseqnum) 
-				udt_send(ACK, expectedseqnum)
-				expectedseqnum++
-			else 
-				build_data(ACK, buffer) 
-				udt_send(ACK, expectedseqnum-1)
-		}
-	}
-	*/
-// }
-

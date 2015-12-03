@@ -24,9 +24,6 @@ void resend_window(int sig)
     //retransmit everything in my window
     state = RETRANSMIT;
     printf("========= Timer expired on seqnum = %d state = %d\n", base, state);
-    // if (signal(SIGALRM, (void (*)(int)) resend_window) == SIG_ERR) {
-    //     error("ERROR Unable to catch SIGALRM");
-    // }
 }
 
 int main(int argc, char *argv[])
@@ -77,24 +74,6 @@ int main(int argc, char *argv[])
     snd_addr.sin_port = htons(portno);
     // socket doesn't need to bind(), we just let OS assign a port number automatically
 
-    // // Build a request packet
-    // printf("Building request packet for file: %s\n", filename);
-    // out_pkt.type = DATA;
-    // out_pkt.seqnum = 1;
-    // out_pkt.ending_flag = 1;
-    // out_pkt.size = strlen(filename) + 1;// string end character
-    // strcpy(out_pkt.data, filename);
-
-    // // Send request packet
-    // print_packet(out_pkt, 0, 0);// send request pakcet, print data
-    // lastDataSeqNum = 1;
-    // if (sendto(sockfd, &out_pkt, sizeof(out_pkt), 0, (struct sockaddr*) &snd_addr, sizeof(snd_addr)) == -1)
-    //     error("ERROR on sending file request packet");
-    // nextSeqNum += 1;
-
-    // char* sndBuffer[SEND_BUFFER_SIZE];
-    // memset(sndBuffer, '\0', SEND_BUFFER_SIZE);
-    
     unsigned int rcvBufferSize = RECEIVE_BUFFER_SIZE;
     unsigned int rcvBufferIndex = 0;
     char* rcvBuffer = (char*)malloc(sizeof(char) * RECEIVE_BUFFER_SIZE);
@@ -131,7 +110,10 @@ int main(int argc, char *argv[])
         FD_ZERO(&readfds);
         FD_SET(sockfd, &readfds);
 
-        if(select(sockfd+1, &readfds, NULL, NULL, &tv)){
+       if(select(sockfd+1, &readfds, NULL, NULL, &tv) < 0){
+            printf("select error\n");
+        } 
+        else if (FD_ISSET(sockfd, &readfds)) {
             //receive data
             if (recvfrom(sockfd, &in_pkt, sizeof(in_pkt), 0, (struct sockaddr*) &snd_addr, &snd_addr_len) == -1){
                 error("ERROR on receiving file request packet");
@@ -191,11 +173,6 @@ int main(int argc, char *argv[])
             }
             else if(state == ERROR)
             {
-                // char error_msg[PACKET_SIZE+1];
-                // memcpy(error_msg, in_pkt.data, in_pkt.size);
-                // error_msg[in_pkt.size] = '\0';
-                // printf("ERROR Received: %s", error_msg);
-
                 // Error message is sent as a string
                 printf("ERROR Received: %s\n\n", in_pkt.data);
                 exit(0);
@@ -217,34 +194,6 @@ int main(int argc, char *argv[])
                 fclose (new_file);
 
                 state = WAITING;
-                //exit(0);
-
-                // //reset the receiver buffer
-                // free(rcvBuffer);
-                // rcvBufferSize = RECEIVE_BUFFER_SIZE;
-                // rcvBufferIndex = 0;
-                // rcvBuffer = (char*)malloc(sizeof(char) * RECEIVE_BUFFER_SIZE);
-
-                // // prompt user for another file name
-                // printf("Please enter another file name: ");
-                // scanf("%s", filename);
-
-                // // Build a request packet
-                // printf("Building request packet for file: %s\n", filename);
-                // out_pkt.type = DATA;
-                // out_pkt.seqnum = nextSeqNum;
-                // out_pkt.ending_flag = 1;
-                // out_pkt.size = strlen(filename) + 1;// string end character
-                // strcpy(out_pkt.data, filename);
-
-                // // Send request packet
-                // print_packet(out_pkt, 0, 0);// send request pakcet, print data
-                // lastDataSeqNum = 1;
-                // if (sendto(sockfd, &out_pkt, sizeof(out_pkt), 0, (struct sockaddr*) &snd_addr, sizeof(snd_addr)) == -1)
-                //     error("ERROR on sending file request packet");
-                // nextSeqNum += 1;
-
-                // state = TRANSMITTING;
             }
             else if (state == WAITING)
             {

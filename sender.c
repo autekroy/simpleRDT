@@ -62,7 +62,7 @@ int main(int argc, char *argv[])
     
     //bind the port number to this socket  
     snd_addr.sin_family = AF_INET;
-    snd_addr.sin_addr.s_addr = INADDR_ANY;
+    snd_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     snd_addr.sin_port = htons(portno);   
     if (bind(sockfd, (struct sockaddr *) &snd_addr, sizeof(snd_addr)) < 0) 
         error("ERROR on binding");
@@ -108,14 +108,17 @@ int main(int argc, char *argv[])
         FD_ZERO(&readfds);
         FD_SET(sockfd, &readfds);
 
-        if(select(sockfd+1, &readfds, NULL, NULL, &tv))
-        {
+       if(select(sockfd+1, &readfds, NULL, NULL, &tv) < 0){
+            printf("select error\n");
+        } 
+        else if (FD_ISSET(sockfd, &readfds)) {
             //receive data
             if (recvfrom(sockfd, &in_pkt, sizeof(in_pkt), 0, (struct sockaddr*) &rcv_addr, &rcv_addr_len) == -1){
                 error("ERROR on receiving file request packet");
             }
             print_packet(in_pkt, 1, 0); // receive request, print request
 
+            rcv_addr.sin_family = AF_INET;
             //if received DATA
             if(in_pkt.type == DATA)
             {
