@@ -1,5 +1,5 @@
 #define PACKET_SIZE 		1024
-#define TIMEOUT				200	//in miliseconds 		
+#define TIMEOUT				500	//in miliseconds 		
 
 //state constant
 #define WAITING     		0

@@ -38,6 +38,7 @@ int main(int argc, char *argv[])
     int file_size;
 
     socklen_t rcv_addr_len;
+    rcv_addr_len = sizeof(struct sockaddr_in);
 
     if (argc != 5)
        error("Usage: ./sender <portnumber> <window size> <loss rate> <corrupt rate>\n");
@@ -108,17 +109,13 @@ int main(int argc, char *argv[])
         FD_ZERO(&readfds);
         FD_SET(sockfd, &readfds);
 
-       if(select(sockfd+1, &readfds, NULL, NULL, &tv) < 0){
-            printf("select error\n");
-        } 
-        else if (FD_ISSET(sockfd, &readfds)) {
+        if (select(sockfd+1, &readfds, NULL, NULL, &tv) == 1) {
             //receive data
             if (recvfrom(sockfd, &in_pkt, sizeof(in_pkt), 0, (struct sockaddr*) &rcv_addr, &rcv_addr_len) == -1){
                 error("ERROR on receiving file request packet");
             }
             print_packet(in_pkt, 1, 0); // receive request, print request
 
-            rcv_addr.sin_family = AF_INET;
             //if received DATA
             if(in_pkt.type == DATA)
             {

@@ -34,6 +34,7 @@ int main(int argc, char *argv[])
     int file_size;
 
     socklen_t snd_addr_len;
+    snd_addr_len = sizeof(struct sockaddr_in);
     struct hostent *server; //contains tons of information, including the server's IP address
     char *hostname, *filename;
 
@@ -110,10 +111,7 @@ int main(int argc, char *argv[])
         FD_ZERO(&readfds);
         FD_SET(sockfd, &readfds);
 
-       if(select(sockfd+1, &readfds, NULL, NULL, &tv) < 0){
-            printf("select error\n");
-        } 
-        else if (FD_ISSET(sockfd, &readfds)) {
+        if(select(sockfd+1, &readfds, NULL, NULL, &tv) == 1){
             //receive data
             if (recvfrom(sockfd, &in_pkt, sizeof(in_pkt), 0, (struct sockaddr*) &snd_addr, &snd_addr_len) == -1){
                 error("ERROR on receiving file request packet");
